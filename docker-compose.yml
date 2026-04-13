@@ -1,5 +1,21 @@
 version: '3.8'
+
 services:
+  automatic-test:
+    build: .
+    container_name: automatic-test
+    ports:
+      - "3001:3001"
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/auto_test_db?schema=public
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
   postgres:
     image: postgres:15
     restart: always
