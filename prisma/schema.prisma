@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  environments Environment[]
+  apiTestCases ApiTestCase[]
+  uiTestCases  UiTestCase[]
+  testSuites   TestSuite[]
+}
+
+model Environment {
+  id        String   @id @default(cuid())
+  name      String
+  baseUrl   String
+  headers   Json? // Global headers for this environment
+  variables Json? // Global variables (key-value)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+}
+
+model ApiTestCase {
+  id         String      @id @default(cuid())
+  name       String
+  method     String      @default("GET")
+  url        String
+  headers    Json?
+  params     Json?
+  body       Json?
+  assertions Json? // Array of assertion objects
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  results    TestResult[]
+  suiteItems SuiteItem[]
+}
+
+model UiTestCase {
+  id         String      @id @default(cuid())
+  name       String
+  steps      Json? // Array of steps for low-code or a script string
+  script     String? // Playwright script if code-based
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  results    TestResult[]
+  suiteItems SuiteItem[]
+}
+
+model TestSuite {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items       SuiteItem[]
+  runs        TestRun[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model SuiteItem {
+  id            String       @id @default(cuid())
+  suiteId       String
+  suite         TestSuite    @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  apiTestCaseId String?
+  apiTestCase   ApiTestCase? @relation(fields: [apiTestCaseId], references: [id])
+  uiTestCaseId  String?
+  uiTestCase    UiTestCase?  @relation(fields: [uiTestCaseId], references: [id])
+  order         Int          @default(0)
+}
+
+model TestRun {
+  id            String       @id @default(cuid())
+  suiteId       String?
+  suite         TestSuite?   @relation(fields: [suiteId], references: [id])
+  environmentId String
+  status        String       @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+  startTime     DateTime?
+  endTime       DateTime?
+  results       TestResult[]
+  createdAt     DateTime     @default(now())
+}
+
+model TestResult {
+  id            String       @id @default(cuid())
+  runId         String
+  run           TestRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  apiTestCaseId String?
+  apiTestCase   ApiTestCase? @relation(fields: [apiTestCaseId], references: [id])
+  uiTestCaseId  String?
+  uiTestCase    UiTestCase?  @relation(fields: [uiTestCaseId], references: [id])
+  status        String // SUCCESS, FAILURE, ERROR
+  duration      Int // in ms
+  logs          String?
+  errorMessage  String?
+  screenshotUrl String? // For UI tests
+  createdAt     DateTime     @default(now())
+}
