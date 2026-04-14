@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM m.daocloud.io/docker.io/library/node:20-alpine AS builder
+FROM m.daocloud.io/docker.io/library/node:22-alpine AS builder
 WORKDIR /app
 
 # Enable pnpm via corepack
@@ -17,10 +17,10 @@ COPY . .
 RUN npx prisma generate
 
 # Build the application
-RUN pnpm run build
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 
 # Stage 2: Run
-FROM m.daocloud.io/docker.io/library/node:20-alpine AS runner
+FROM m.daocloud.io/docker.io/library/node:22-alpine AS runner
 WORKDIR /app
 
 # Enable pnpm via corepack
