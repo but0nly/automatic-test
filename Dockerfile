@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM m.daocloud.io/docker.io/library/node:22-alpine AS builder
+FROM m.daocloud.io/docker.io/library/node:20-alpine AS builder
 WORKDIR /app
 
 # Enable pnpm via corepack
@@ -17,10 +17,10 @@ COPY . .
 RUN npx prisma generate
 
 # Build the application
-RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
+RUN pnpm run build
 
 # Stage 2: Run
-FROM m.daocloud.io/docker.io/library/node:22-alpine AS runner
+FROM m.daocloud.io/docker.io/library/node:20-alpine AS runner
 WORKDIR /app
 
 # Enable pnpm via corepack
@@ -35,8 +35,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 EXPOSE 3001
 # Run the application using pnpm
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && pnpm run start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && pnpm run start"]
