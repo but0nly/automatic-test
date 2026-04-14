@@ -28,19 +28,16 @@ RUN pnpm run build
 FROM m.daocloud.io/docker.io/library/node:20-alpine AS runner
 WORKDIR /app
 
-# Enable pnpm via corepack
-RUN corepack enable pnpm
-
 ENV NODE_ENV=production
 ENV PORT=3001
 
 # Only copy necessary files for runtime to keep image small
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
-COPY --from=builder /app/.next ./.next
+# In standalone mode, Next.js bundles everything into .next/standalone
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
-# Run the application using pnpm
-CMD ["sh", "-c", "npx prisma migrate deploy && pnpm run start"]
+# Run the application using the standalone server.js
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
