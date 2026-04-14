@@ -21,6 +21,9 @@ ENV REDIS_URL=$REDIS_URL
 # Generate Prisma client
 RUN npx prisma generate
 
+# Ensure database schema exists for the build process (Next.js static generation)
+RUN npx prisma migrate deploy
+
 # Build the application
 RUN pnpm run build
 
