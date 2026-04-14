@@ -61,11 +61,14 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
 
       - name: Transfer Image to Server
-        run: scp -o StrictHostKeyChecking=no -v automatic-test-app.tar.gz ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/tmp/
+        run: |
+          echo "Waiting 10 seconds to avoid triggering server rate limits..."
+          sleep 10
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ConnectTimeout=60 -o IPQoS=cs0 -v automatic-test-app.tar.gz ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/tmp/
 
       - name: SSH Deploy
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ConnectTimeout=60 -o IPQoS=cs0 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             cd apps/automatic-test/
             
             git fetch --all
