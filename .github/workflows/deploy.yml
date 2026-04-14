@@ -47,7 +47,7 @@ jobs:
             --build-arg DATABASE_URL=$DATABASE_URL \
             --build-arg REDIS_URL=$REDIS_URL \
             -t automatic-test-app:latest \
-            automatic-test/
+            .
             
       - name: Save Docker Image to Tar
         run: docker save automatic-test-app:latest > automatic-test-app.tar
