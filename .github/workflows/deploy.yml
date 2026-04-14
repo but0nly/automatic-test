@@ -9,6 +9,11 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     
+    # Require permissions to push to GitHub Container Registry
+    permissions:
+      contents: read
+      packages: write
+    
     services:
       postgres:
         image: postgres:15
@@ -36,21 +41,28 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:password@localhost:5432/auto_test_db?schema=public
       REDIS_URL: redis://localhost:6379
+      IMAGE_NAME: ghcr.io/but0nly/automatic-test-app:latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker Image
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
         run: |
           docker build \
             --network host \
             --build-arg DATABASE_URL=$DATABASE_URL \
             --build-arg REDIS_URL=$REDIS_URL \
-            -t automatic-test-app:latest \
+            -t ${{ env.IMAGE_NAME }} \
             .
             
-      - name: Save Docker Image to Tar
-        run: docker save automatic-test-app:latest | gzip > automatic-test-app.tar.gz
+          docker push ${{ env.IMAGE_NAME }}
 
       - name: Setup SSH
         env:
@@ -60,28 +72,24 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Transfer Image to Server
-        run: |
-          echo "Waiting 10 seconds to avoid triggering server rate limits..."
-          sleep 10
-          # Use raw SSH pipe to bypass the SFTP subsystem which frequently hangs on restricted/small servers
-          cat automatic-test-app.tar.gz | ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ConnectTimeout=60 -o IPQoS=cs0 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "cat > /tmp/automatic-test-app.tar.gz"
-
       - name: SSH Deploy
         run: |
+          # Use EOF to pass multiline script to the remote server securely
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ConnectTimeout=60 -o IPQoS=cs0 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             cd apps/automatic-test/
             
             git fetch --all
             git reset --hard origin/main
             
-            # Load the pre-built image
-            gunzip -c /tmp/automatic-test-app.tar.gz | sudo docker load
+            # Log in to GitHub Container Registry on the server
+            # We use the standard GITHUB_TOKEN passed as an environment variable in Actions
+            # However, since this script runs ON the server, secrets are evaluated before SSH sends it
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Remove the tar file to save space
-            rm /tmp/automatic-test-app.tar.gz
+            # Pull the image directly via fast HTTPS (bypasses any SSH size/time limits!)
+            sudo docker pull ghcr.io/but0nly/automatic-test-app:latest
             
-            # Start the container (will use the loaded image, no building on server)
+            # Start the container
             sudo docker compose up -d
             
             # Clean up old unused images
