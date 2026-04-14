@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
     services:
@@ -18,7 +18,6 @@ jobs:
           POSTGRES_DB: auto_test_db
         ports:
           - 5432:5432
-        # Wait for postgres to be ready
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -37,34 +36,31 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:password@localhost:5432/auto_test_db?schema=public
       REDIS_URL: redis://localhost:6379
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          
-      - name: Install dependencies
-        run: pnpm install
-        
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        
-      - name: Build
-        run: pnpm run build
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --network host \
+            --build-arg DATABASE_URL=$DATABASE_URL \
+            --build-arg REDIS_URL=$REDIS_URL \
+            -t automatic-test-app:latest \
+            automatic-test/
+            
+      - name: Save Docker Image to Tar
+        run: docker save automatic-test-app:latest > automatic-test-app.tar
+
+      - name: Transfer Image to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "automatic-test-app.tar"
+          target: "/tmp/"
+
       - name: SSH Deploy
         uses: appleboy/ssh-action@master
         with:
@@ -72,18 +68,19 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # 这里的路径替换为你服务器上项目的实际路径
             cd apps/automatic-test/
             
-            # 放弃所有本地修改，强制拉取最新代码（防止因为有本地修改导致 Git 需要合并冲突而卡住）
             git fetch --all
             git reset --hard origin/main
             
-            # 重新构建 Docker 镜像（使用 plain 进度输出，这样能实时看到日志，防止在 GitHub 界面上看起来像卡死了）
-            sudo docker compose build --progress=plain
+            # Load the pre-built image
+            sudo docker load < /tmp/automatic-test-app.tar
             
-            # 启动容器
+            # Remove the tar file to save space
+            rm /tmp/automatic-test-app.tar
+            
+            # Start the container (will use the loaded image, no building on server)
             sudo docker compose up -d
             
-            # 清理无用的镜像
+            # Clean up old unused images
             sudo docker image prune -f

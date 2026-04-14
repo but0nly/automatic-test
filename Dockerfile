@@ -13,6 +13,11 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+ARG DATABASE_URL
+ARG REDIS_URL
+ENV DATABASE_URL=$DATABASE_URL
+ENV REDIS_URL=$REDIS_URL
+
 # Generate Prisma client
 RUN npx prisma generate
 
