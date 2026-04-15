@@ -9,7 +9,7 @@ RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml .npmrc ./
 
 # Install dependencies using pnpm
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 COPY . .
 
@@ -22,7 +22,7 @@ ENV REDIS_URL=$REDIS_URL
 RUN npx prisma generate
 
 # Ensure database schema exists for the build process (Next.js static generation)
-RUN npx prisma migrate deploy
+RUN npx prisma@6.19.3 migrate deploy
 
 # Build the application
 RUN pnpm run build
@@ -33,14 +33,14 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV HOSTNAME="0.0.0.0"
 
 # Only copy necessary files for runtime to keep image small
-# In standalone mode, Next.js bundles everything into .next/standalone
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
-# Run the application using the standalone server.js
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Run the application using the standalone server.js and force Prisma 6 version
+CMD ["sh", "-c", "npx prisma@6.19.3 migrate deploy && node server.js"]
