@@ -43,4 +43,4 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
 # Run the application using the standalone server.js and force Prisma 6 version
-CMD ["sh", "-c", "npx prisma@6.19.3 migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx prisma@6.19.3 db push && node server.js"]
